@@ -22,25 +22,42 @@ st.sidebar.header("⚙️ Impostazioni AI & Cloud")
 # 💡 CHIAVE GROQ:
 DEFAULT_KEY = "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"
 
-# 💡 URL SUPABASE CON PASSWORD FORMATTATA (il simbolo ! diventa %21):
-db_url = "postgresql://postgres.incwdmenairgbqcvbhk:Tluzziuser123%21@aws-0-eu-central-1.pooler.supabase.com:6543/postgres"
-
 ai_key = st.sidebar.text_input(
     "API Key (Groq o Gemini):",
     value=DEFAULT_KEY,
     type="password"
 )
 
+# 💡 PARAMETRI DI CONNESSIONE SUPABASE (Con Connessione SSL Garantita):
+DB_HOST = "aws-0-eu-central-1.pooler.supabase.com"
+DB_PORT = 6543
+DB_USER = "postgres.incwdmenairgbqcvbhk"
+DB_PASS = "Tluzziuser123!"
+DB_NAME = "postgres"
+
 
 # --- 2. GESTIONE DATABASE POSTGRESQL (CLOUD CONDIVISO) ---
 def get_db_connection():
     try:
-        return psycopg2.connect(db_url)
+        return psycopg2.connect(
+            host=DB_HOST,
+            port=DB_PORT,
+            user=DB_USER,
+            password=DB_PASS,
+            dbname=DB_NAME,
+            sslmode="require"
+        )
     except Exception as e:
-        # Tentativo di fallback sulla porta diretta 5432 se la 6543 fallisce
+        # Fallback automatico sulla porta diretta 5432
         try:
-            fallback_url = db_url.replace(":6543", ":5432")
-            return psycopg2.connect(fallback_url)
+            return psycopg2.connect(
+                host=DB_HOST,
+                port=5432,
+                user=DB_USER,
+                password=DB_PASS,
+                dbname=DB_NAME,
+                sslmode="require"
+            )
         except Exception as e2:
             st.error(f"🔴 Errore di connessione al Database Supabase: {e2}")
             return None
