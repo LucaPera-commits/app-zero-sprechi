@@ -1,4 +1,6 @@
 import datetime
+import json
+import sqlite3
 import pandas as pd
 import requests
 import streamlit as st
@@ -12,10 +14,10 @@ st.set_page_config(
 )
 
 st.title("🥗 ZeroSpreco Familiare")
-st.caption("Versione 10.1 - Multi-Utente Condiviso in Cloud")
+st.caption("Versione 10.1 - Dispensa Condivisa & IA Chef")
 
 # --- SIDEBAR: CHIAVI E CONNESSIONI ---
-st.sidebar.header("⚙️ Impostazioni AI & Cloud")
+st.sidebar.header("⚙️ Impostazioni AI")
 
 # 💡 CHIAVE GROQ:
 DEFAULT_KEY = "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"
@@ -26,129 +28,113 @@ ai_key = st.sidebar.text_input(
     type="password"
 )
 
-# 💡 CONFIGURAZIONE API SUPABASE (Tentativo automatico su endpoint principale e regionale):
-PROJECT_ID = "incwdmenairgbqcvbhk"
-SUPABASE_KEY = "sb_publishable_O5R8uTM_osmovbo_7cjjGg_3XwZQ" 
+DB_FILE = "dispensa_local.db"
 
-URL_CANDIDATES = [
-    f"https://{PROJECT_ID}.supabase.co",
-    f"https://{PROJECT_ID}.supabase.in",
-    f"https://{PROJECT_ID}.eu-central-1.supabase.co"
-]
+# --- 2. GESTIONE DATABASE SQLITE LOCAL (Zero configurazione rete) ---
+def get_db_connection():
+    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
 
-HEADERS = {
-    "apikey": SUPABASE_KEY,
-    "Authorization": f"Bearer {SUPABASE_KEY}",
-    "Content-Type": "application/json",
-    "Prefer": "return=representation"
-}
+def init_db():
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS dispensa (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            marca TEXT,
+            scadenza TEXT,
+            giorni_rimasti INT,
+            quantita INT DEFAULT 1,
+            kcal_100g REAL DEFAULT 0,
+            categoria TEXT DEFAULT 'Altro',
+            aperto INT DEFAULT 0,
+            giorni_da_aperto INT DEFAULT 3,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+    conn.commit()
+    conn.close()
 
-
-def get_working_url():
-    """Trova l'URL di Supabase che risponde correttamente sulla rete."""
-    if "working_supabase_url" in st.session_state:
-        return st.session_state["working_supabase_url"]
-        
-    for base_url in URL_CANDIDATES:
-        try:
-            res = requests.get(f"{base_url}/rest/v1/", headers=HEADERS, timeout=3)
-            if res.status_code in [200, 401, 404]:  # Se il server risponde, l'host esiste!
-                st.session_state["working_supabase_url"] = base_url
-                return base_url
-        except Exception:
-            continue
-            
-    # Fallback predefinito se nessun ping ha successo al primo colpo
-    return URL_CANDIDATES[0]
+# Inizializza il DB locale se non esiste
+init_db()
 
 
-# --- 2. GESTIONE DATABASE SUPABASE VIA REST API ---
 def salva_in_db(nome, marca, scadenza, giorni_rimasti, quantita, kcal_100g, categoria="Altro", giorni_da_aperto=3):
-    base_url = get_working_url()
-    url = f"{base_url}/rest/v1/dispensa"
-    payload = {
-        "nome": nome,
-        "marca": marca,
-        "scadenza": scadenza,
-        "giorni_rimasti": giorni_rimasti,
-        "quantita": quantita,
-        "kcal_100g": kcal_100g,
-        "categoria": categoria,
-        "aperto": 0,
-        "giorni_da_aperto": giorni_da_aperto
-    }
     try:
-        res = requests.post(url, json=payload, headers=HEADERS, timeout=5)
-        if res.status_code not in [200, 201]:
-            st.error(f"Errore salvataggio Supabase: {res.text}")
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("""
+            INSERT INTO dispensa (nome, marca, scadenza, giorni_rimasti, quantita, kcal_100g, categoria, aperto, giorni_da_aperto)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
+        """, (nome, marca, scadenza, giorni_rimasti, quantita, kcal_100g, categoria, giorni_da_aperto))
+        conn.commit()
+        conn.close()
     except Exception as e:
-        st.error(f"Errore di rete: {e}")
+        st.error(f"Errore salvataggio: {e}")
 
 
 def carica_da_db():
-    base_url = get_working_url()
-    url = f"{base_url}/rest/v1/dispensa?select=*&order=id.desc"
     try:
-        res = requests.get(url, headers=HEADERS, timeout=5)
-        if res.status_code == 200:
-            data = res.json()
-            df = pd.DataFrame(data)
-            if not df.empty:
-                df['Scadenza_dt'] = pd.to_datetime(df['scadenza'], format='%d/%m/%Y', errors='coerce')
-                oggi = pd.Timestamp.now().normalize()
-                df['Giorni Rimasti'] = (df['Scadenza_dt'] - oggi).dt.days.fillna(0).astype(int)
-                df = df.drop(columns=['Scadenza_dt'])
-                df = df.sort_values(by='Giorni Rimasti')
-            return df
-        else:
-            st.error(f"🔴 Errore caricamento Supabase API ({res.status_code}): {res.text}")
-            return pd.DataFrame()
+        conn = get_db_connection()
+        df = pd.read_sql_query("SELECT * FROM dispensa ORDER BY id DESC", conn)
+        conn.close()
+        
+        if not df.empty:
+            df['Scadenza_dt'] = pd.to_datetime(df['scadenza'], format='%d/%m/%Y', errors='coerce')
+            oggi = pd.Timestamp.now().normalize()
+            df['Giorni Rimasti'] = (df['Scadenza_dt'] - oggi).dt.days.fillna(0).astype(int)
+            df = df.drop(columns=['Scadenza_dt'])
+            df = df.sort_values(by='Giorni Rimasti')
+        return df
     except Exception as e:
         st.error(f"🔴 Errore caricamento dati: {e}")
         return pd.DataFrame()
 
 
 def segna_come_aperto_db(item_id, giorni_max_aperto=3):
-    base_url = get_working_url()
-    url = f"{base_url}/rest/v1/dispensa?id=eq.{item_id}"
-    nuova_scadenza = (datetime.date.today() + datetime.timedelta(days=giorni_max_aperto)).strftime("%d/%m/%Y")
-    payload = {"aperto": 1, "scadenza": nuova_scadenza}
     try:
-        requests.patch(url, json=payload, headers=HEADERS, timeout=5)
+        conn = get_db_connection()
+        c = conn.cursor()
+        nuova_scadenza = (datetime.date.today() + datetime.timedelta(days=giorni_max_aperto)).strftime("%d/%m/%Y")
+        c.execute("UPDATE dispensa SET aperto = 1, scadenza = ? WHERE id = ?", (nuova_scadenza, item_id))
+        conn.commit()
+        conn.close()
     except Exception as e:
         st.error(f"Errore aggiornamento: {e}")
 
 
 def scala_quantita_db(item_id, delta=1):
-    base_url = get_working_url()
-    url_get = f"{base_url}/rest/v1/dispensa?id=eq.{item_id}"
     try:
-        res = requests.get(url_get, headers=HEADERS)
-        if res.status_code == 200 and res.json():
-            qta_attuale = res.json()[0]['quantita']
-            nuova_qta = qta_attuale - delta
-            if nuova_qta <= 0:
-                elimina_item_db(item_id)
-            else:
-                requests.patch(url_get, json={"quantita": nuova_qta}, headers=HEADERS)
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("UPDATE dispensa SET quantita = quantita - ? WHERE id = ?", (delta, item_id))
+        c.execute("DELETE FROM dispensa WHERE quantita <= 0")
+        conn.commit()
+        conn.close()
     except Exception as e:
         st.error(f"Errore modifica quantità: {e}")
 
 
 def elimina_item_db(item_id):
-    base_url = get_working_url()
-    url = f"{base_url}/rest/v1/dispensa?id=eq.{item_id}"
     try:
-        requests.delete(url, headers=HEADERS, timeout=5)
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("DELETE FROM dispensa WHERE id = ?", (item_id,))
+        conn.commit()
+        conn.close()
     except Exception as e:
         st.error(f"Errore eliminazione: {e}")
 
 
 def svuota_db():
-    base_url = get_working_url()
-    url = f"{base_url}/rest/v1/dispensa?id=gt.0"
     try:
-        requests.delete(url, headers=HEADERS, timeout=5)
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("DELETE FROM dispensa")
+        conn.commit()
+        conn.close()
     except Exception as e:
         st.error(f"Errore svuotamento: {e}")
 
@@ -353,7 +339,7 @@ def sezione_dispensa():
             svuota_db()
             st.rerun()
     else:
-        st.info("La tua dispensa è attualmente vuota o in attesa di caricamento.")
+        st.info("La tua dispensa è attualmente vuota. Aggiungi il tuo primo prodotto qui sopra!")
 
 
 def mostra_tabella_cibi(df_subset, prefix=""):
