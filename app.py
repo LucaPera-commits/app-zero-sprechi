@@ -19,7 +19,7 @@ st.caption("Versione 10.0 - Multi-Utente Condiviso in Cloud")
 # --- SIDEBAR: CHIAVI E CONNESSIONI ---
 st.sidebar.header("⚙️ Impostazioni AI & Cloud")
 
-DEFAULT_KEY = ""
+DEFAULT_KEY = "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"
 ai_key = st.sidebar.text_input(
     "API Key (Groq o Gemini):",
     value=DEFAULT_KEY,
