@@ -25,7 +25,7 @@ DEFAULT_KEY = "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"
 ai_key = st.sidebar.text_input(
     "API Key (Groq o Gemini):",
     value=DEFAULT_KEY,
-    type="password"
+    type="$2a$10$5sbtMO/GBcv/SJgtkHOIWOS83ESeOaWXSRb8MwpplJhW0IXAxe6hK"
 )
 
 DB_FILE = "dispensa_local.db"
