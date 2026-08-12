@@ -27,7 +27,7 @@ ai_key = st.sidebar.text_input(
 )
 
 # 💡 INSERISCI LA TUA MASTER KEY DI JSONBIN (Copiata da jsonbin.io -> API KEYS):
-JSONBIN_MASTER_KEY = "$2a$10$INCOLLA_QUI_LA_MASTER_KEY"
+JSONBIN_MASTER_KEY = "$2a$10$5sbtMO/GBcv/SJgtkHOIWOS83ESeOaWXSRb8MwpplJhW0IXAxe6hK"
 JSONBIN_BIN_ID = "6a7ca1ecda38895dfedb8754"
 
 BIN_URL = f"https://api.jsonbin.io/v3/b/{JSONBIN_BIN_ID}"
