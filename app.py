@@ -1,8 +1,8 @@
 import datetime
-import json
 import pandas as pd
 import requests
 import streamlit as st
+from supabase import create_client, Client
 
 # --- 1. CONFIGURAZIONE PAGINA ---
 st.set_page_config(
@@ -18,7 +18,7 @@ st.caption("Versione 10.1 - Multi-Utente Condiviso in Cloud")
 # --- SIDEBAR: CHIAVI E CONNESSIONI ---
 st.sidebar.header("⚙️ Impostazioni AI & Cloud")
 
-# 💡 CHIAVE GROQ REAL:
+# 💡 CHIAVE GROQ:
 DEFAULT_KEY = "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"
 
 ai_key = st.sidebar.text_input(
@@ -27,23 +27,26 @@ ai_key = st.sidebar.text_input(
     type="password"
 )
 
-# 💡 CONFIGURAZIONE API SUPABASE (HTTPS - Esente da problemi di rete/porte)
+# 💡 CONFIGURAZIONE SUPABASE
 SUPABASE_URL = "https://incwdmenairgbqcvbhk.supabase.co"
+SUPABASE_KEY = "sb_publishable_O5R8uTM_osmovbo_7cjjGg_3XwZQ" 
 
-# ⚠️ INCOLLA QUI LA TUA PUBLISHABLE KEY COMPLETA DALLO SCREENSHOT (clicca l'icona copia su Supabase):
-SUPABASE_KEY = "sb_publishable_O5R8uTM_osmovbo_7cjjGg_3XwZQ..." 
+@st.cache_resource
+def init_supabase() -> Client:
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
 
-HEADERS = {
-    "apikey": SUPABASE_KEY,
-    "Authorization": f"Bearer {SUPABASE_KEY}",
-    "Content-Type": "application/json",
-    "Prefer": "return=representation"
-}
+try:
+    supabase = init_supabase()
+except Exception as e:
+    supabase = None
 
 
-# --- 2. GESTIONE DATABASE SUPABASE VIA REST API ---
+# --- 2. GESTIONE DATABASE SUPABASE ---
 def salva_in_db(nome, marca, scadenza, giorni_rimasti, quantita, kcal_100g, categoria="Altro", giorni_da_aperto=3):
-    url = f"{SUPABASE_URL}/rest/v1/dispensa"
+    if not supabase:
+        st.error("Client Supabase non inizializzato.")
+        return
+    
     payload = {
         "nome": nome,
         "marca": marca,
@@ -56,72 +59,70 @@ def salva_in_db(nome, marca, scadenza, giorni_rimasti, quantita, kcal_100g, cate
         "giorni_da_aperto": giorni_da_aperto
     }
     try:
-        res = requests.post(url, json=payload, headers=HEADERS, timeout=5)
-        if res.status_code not in [200, 201]:
-            st.error(f"Errore salvataggio Supabase: {res.text}")
+        supabase.table("dispensa").insert(payload).execute()
     except Exception as e:
-        st.error(f"Errore di rete: {e}")
+        st.error(f"Errore salvataggio: {e}")
 
 
 def carica_da_db():
-    url = f"{SUPABASE_URL}/rest/v1/dispensa?select=*&order=id.desc"
+    if not supabase:
+        return pd.DataFrame()
     try:
-        res = requests.get(url, headers=HEADERS, timeout=5)
-        if res.status_code == 200:
-            data = res.json()
-            df = pd.DataFrame(data)
-            if not df.empty:
-                df['Scadenza_dt'] = pd.to_datetime(df['scadenza'], format='%d/%m/%Y', errors='coerce')
-                oggi = pd.Timestamp.now().normalize()
-                df['Giorni Rimasti'] = (df['Scadenza_dt'] - oggi).dt.days.fillna(0).astype(int)
-                df = df.drop(columns=['Scadenza_dt'])
-                df = df.sort_values(by='Giorni Rimasti')
-            return df
-        else:
-            st.error(f"🔴 Errore caricamento Supabase API ({res.status_code}): {res.text}")
-            return pd.DataFrame()
+        response = supabase.table("dispensa").select("*").order("id", desc=True).execute()
+        data = response.data
+        df = pd.DataFrame(data)
+        if not df.empty:
+            df['Scadenza_dt'] = pd.to_datetime(df['scadenza'], format='%d/%m/%Y', errors='coerce')
+            oggi = pd.Timestamp.now().normalize()
+            df['Giorni Rimasti'] = (df['Scadenza_dt'] - oggi).dt.days.fillna(0).astype(int)
+            df = df.drop(columns=['Scadenza_dt'])
+            df = df.sort_values(by='Giorni Rimasti')
+        return df
     except Exception as e:
-        st.error(f"🔴 Errore di connessione API Supabase: {e}")
+        st.error(f"🔴 Errore caricamento dati: {e}")
         return pd.DataFrame()
 
 
 def segna_come_aperto_db(item_id, giorni_max_aperto=3):
-    url = f"{SUPABASE_URL}/rest/v1/dispensa?id=eq.{item_id}"
+    if not supabase:
+        return
     nuova_scadenza = (datetime.date.today() + datetime.timedelta(days=giorni_max_aperto)).strftime("%d/%m/%Y")
-    payload = {"aperto": 1, "scadenza": nuova_scadenza}
     try:
-        requests.patch(url, json=payload, headers=HEADERS, timeout=5)
+        supabase.table("dispensa").update({"aperto": 1, "scadenza": nuova_scadenza}).eq("id", item_id).execute()
     except Exception as e:
         st.error(f"Errore aggiornamento: {e}")
 
 
 def scala_quantita_db(item_id, delta=1):
-    url_get = f"{SUPABASE_URL}/rest/v1/dispensa?id=eq.{item_id}"
+    if not supabase:
+        return
     try:
-        res = requests.get(url_get, headers=HEADERS)
-        if res.status_code == 200 and res.json():
-            qta_attuale = res.json()[0]['quantita']
+        res = supabase.table("dispensa").select("quantita").eq("id", item_id).execute()
+        if res.data:
+            qta_attuale = res.data[0]['quantita']
             nuova_qta = qta_attuale - delta
             if nuova_qta <= 0:
                 elimina_item_db(item_id)
             else:
-                requests.patch(url_get, json={"quantita": nuova_qta}, headers=HEADERS)
+                supabase.table("dispensa").update({"quantita": nuova_qta}).eq("id", item_id).execute()
     except Exception as e:
         st.error(f"Errore modifica quantità: {e}")
 
 
 def elimina_item_db(item_id):
-    url = f"{SUPABASE_URL}/rest/v1/dispensa?id=eq.{item_id}"
+    if not supabase:
+        return
     try:
-        requests.delete(url, headers=HEADERS, timeout=5)
+        supabase.table("dispensa").delete().eq("id", item_id).execute()
     except Exception as e:
         st.error(f"Errore eliminazione: {e}")
 
 
 def svuota_db():
-    url = f"{SUPABASE_URL}/rest/v1/dispensa?id=gt.0"
+    if not supabase:
+        return
     try:
-        requests.delete(url, headers=HEADERS, timeout=5)
+        supabase.table("dispensa").delete().neq("id", 0).execute()
     except Exception as e:
         st.error(f"Errore svuotamento: {e}")
 
