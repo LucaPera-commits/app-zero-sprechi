@@ -23,7 +23,7 @@ st.sidebar.header("⚙️ Impostazioni AI & Cloud")
 DEFAULT_KEY = "gsk_LA_TUA_CHIAVE_GROQ"
 
 # 💡 INSERISCI QUI IL TUO URL SUPABASE CON LA TUA PASSWORD VERA:
-db_url = "postgresql://postgres.incwdmenairgbqcvbhk:LA_TUA_PASSWORD_VERA@aws-0-eu-central-1.pooler.supabase.com:6543/postgres"
+db_url = "postgresql://postgres.incwdmenairgbqcvbhk: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@db.incwdmenairgbqcvbhk.supabase.co:5432/postgres"
 
 ai_key = st.sidebar.text_input(
     "API Key (Groq o Gemini):",
