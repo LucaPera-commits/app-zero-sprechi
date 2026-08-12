@@ -22,12 +22,12 @@ st.sidebar.header("⚙️ Impostazioni AI & Cloud")
 # 💡 CHIAVE GROQ:
 DEFAULT_KEY = "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"
 
-ai_key = st.sidebar.text_input(
-    "API Key (Groq o Gemini):",
-    value=DEFAULT_KEY,
-    type="password"
-)
-
+# 💡 PARAMETRI DI CONNESSIONE SUPABASE DIRETTI:
+DB_HOST = "db.incwdmenairgbqcvbhk.supabase.co"
+DB_PORT = 5432
+DB_USER = "postgres"
+DB_PASS = "Tluzziuser123!"
+DB_NAME = "postgres"
 # 💡 PARAMETRI DI CONNESSIONE SUPABASE (Con Connessione SSL Garantita):
 DB_HOST = "aws-0-eu-central-1.pooler.supabase.com"
 DB_PORT = 6543
