@@ -28,7 +28,7 @@ ai_key = st.sidebar.text_input(
 )
 
 # Connessione PostgreSQL (Supabase/Neon) gestita tramite st.secrets o input sidebar
-db_url = "postgresql://postgres.incwdmenairgbqcvbhk:METTI_QUI_LA_TUA_PASSWORD@aws-0-eu-central-1.pooler.supabase.com:6543/postgres")
+db_url = "postgresql://postgres.incwdmenairgbqcvbhk:METTI_QUI_LA_TUA_PASSWORD@aws-0-eu-central-1.pooler.supabase.com:6543/postgres"
 
 # --- 2. GESTIONE DATABASE POSTGRESQL (CLOUD CONDIVISO) ---
 def get_db_connection():
