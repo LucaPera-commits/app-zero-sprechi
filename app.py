@@ -13,7 +13,7 @@ st.set_page_config(
 )
 
 st.title("🥗 ZeroSpreco Familiare")
-st.caption("Versione 10.1 - Cloud Sincronizzato Sempre Attivo")
+st.caption("Versione 10.1 - Cloud Sincronizzato")
 
 # --- SIDEBAR: CHIAVI E CONNESSIONI ---
 st.sidebar.header("⚙️ Impostazioni AI")
@@ -26,9 +26,9 @@ ai_key = st.sidebar.text_input(
     type="password"
 )
 
-# ⚠️ INSERISCI QUI LA TUA MASTER KEY PRESA DA JSONBIN -> API KEYS:
-JSONBIN_MASTER_KEY = "INCOLLA_QUI_LA_MASTER_KEY"
-JSONBIN_BIN_ID = "$2a$10$5sbtMO/GBcv/SJgtkHOIWOS83ESeOaWXSRb8MwpplJhW0IXAxe6hK"
+# 💡 INSERISCI LA TUA MASTER KEY DI JSONBIN (Copiata da jsonbin.io -> API KEYS):
+JSONBIN_MASTER_KEY = "$2a$10$INCOLLA_QUI_LA_MASTER_KEY"
+JSONBIN_BIN_ID = "6a7ca1ecda38895dfedb8754"
 
 BIN_URL = f"https://api.jsonbin.io/v3/b/{JSONBIN_BIN_ID}"
 HEADERS = {
@@ -42,8 +42,15 @@ def carica_da_db():
     try:
         res = requests.get(f"{BIN_URL}/latest", headers=HEADERS, timeout=5)
         if res.status_code == 200:
-            record = res.json().get("record", {})
-            items = record.get("items", []) if isinstance(record, dict) else []
+            data = res.json()
+            record = data.get("record", {})
+            if isinstance(record, dict):
+                items = record.get("items", [])
+            elif isinstance(record, list):
+                items = record
+            else:
+                items = []
+                
             df = pd.DataFrame(items)
             if not df.empty:
                 df['Scadenza_dt'] = pd.to_datetime(df['scadenza'], format='%d/%m/%Y', errors='coerce')
@@ -52,36 +59,42 @@ def carica_da_db():
                 df = df.drop(columns=['Scadenza_dt'])
                 df = df.sort_values(by='Giorni Rimasti')
             return df
-        return pd.DataFrame()
+        else:
+            st.error(f"⚠️ Errore caricamento Cloud ({res.status_code}): {res.text}")
+            return pd.DataFrame()
     except Exception as e:
-        st.error(f"Errore caricamento Cloud: {e}")
+        st.error(f"Errore connessione Cloud: {e}")
         return pd.DataFrame()
 
 
 def salva_lista_cloud(items_list):
     try:
         payload = {"items": items_list}
-        requests.put(BIN_URL, json=payload, headers=HEADERS, timeout=5)
+        res = requests.put(BIN_URL, json=payload, headers=HEADERS, timeout=5)
+        if res.status_code not in [200, 201]:
+            st.error(f"🔴 Errore salvataggio Cloud ({res.status_code}): {res.text}")
+        else:
+            st.success("✅ Salvato nel Cloud!")
     except Exception as e:
-        st.error(f"Errore salvataggio Cloud: {e}")
+        st.error(f"Errore di rete durante il salvataggio: {e}")
 
 
 def salva_in_db(nome, marca, scadenza, giorni_rimasti, quantita, kcal_100g, categoria="Altro", giorni_da_aperto=3):
     df = carica_da_db()
     items = df.to_dict(orient="records") if not df.empty else []
     
-    nuovo_id = max([i.get("id", 0) for i in items], default=0) + 1
+    nuovo_id = max([int(i.get("id", 0)) for i in items], default=0) + 1
     nuovo_item = {
         "id": nuovo_id,
         "nome": nome,
         "marca": marca,
         "scadenza": scadenza,
-        "giorni_rimasti": giorni_rimasti,
-        "quantita": quantita,
-        "kcal_100g": kcal_100g,
+        "giorni_rimasti": int(giorni_rimasti),
+        "quantita": int(quantita),
+        "kcal_100g": float(kcal_100g),
         "categoria": categoria,
         "aperto": 0,
-        "giorni_da_aperto": giorni_da_aperto
+        "giorni_da_aperto": int(giorni_da_aperto)
     }
     items.append(nuovo_item)
     salva_lista_cloud(items)
@@ -267,7 +280,6 @@ def sezione_ricerca():
                     categoria=cat_scelta,
                     giorni_da_aperto=giorni_dopo_apertura
                 )
-                st.success(f"✅ Salvato: {prodotto_scelto['nome']}")
                 st.session_state["risultati_ricerca"] = []
                 st.rerun()
 
@@ -299,7 +311,6 @@ def sezione_ricerca():
                     categoria=cat_fresco,
                     giorni_da_aperto=giorni_stima
                 )
-                st.success(f"✅ Salvato cibo fresco: {nome_fresco}")
                 st.rerun()
 
 
