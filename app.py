@@ -20,10 +20,10 @@ st.caption("Versione 10.1 - Multi-Utente Condiviso in Cloud")
 st.sidebar.header("⚙️ Impostazioni AI & Cloud")
 
 # 💡 INSERISCI QUI LA TUA CHIAVE GROQ REAL:
-DEFAULT_KEY = "gsk_LA_TUA_CHIAVE_GROQ"
+DEFAULT_KEY = "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"
 
 # 💡 INSERISCI QUI IL TUO URL SUPABASE CON LA TUA PASSWORD VERA:
-db_url = "postgresql://postgres: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@db.incwdmenairgvbqcvbhk.supabase.co:5432/postgres"
+db_url = "postgresql://postgres.incwdmenairgbqcvbhk:Etr1000!!123@aws-0-eu-central-1.pooler.supabase.com:5432/postgres"
 
 ai_key = st.sidebar.text_input(
     "API Key (Groq o Gemini):",
