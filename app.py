@@ -1,4 +1,5 @@
 import datetime
+import json
 import pandas as pd
 import requests
 import streamlit as st
@@ -17,7 +18,7 @@ st.caption("Versione 10.1 - Multi-Utente Condiviso in Cloud")
 # --- SIDEBAR: CHIAVI E CONNESSIONI ---
 st.sidebar.header("⚙️ Impostazioni AI & Cloud")
 
-# 💡 CHIAVE GROQ:
+# 💡 CHIAVE GROQ REAL:
 DEFAULT_KEY = "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"
 
 ai_key = st.sidebar.text_input(
@@ -26,10 +27,11 @@ ai_key = st.sidebar.text_input(
     type="password"
 )
 
-# 💡 CONFIGURAZIONE API SUPABASE (HTTPS - Esente da errori di porta/IPv6)
+# 💡 CONFIGURAZIONE API SUPABASE (HTTPS - Esente da problemi di rete/porte)
 SUPABASE_URL = "https://incwdmenairgbqcvbhk.supabase.co"
-# Inseriamo la Publishable/Anon Key trovata nelle impostazioni API di Supabase:
-SUPABASE_KEY = "sb_publishable_key" 
+
+# ⚠️ INCOLLA QUI LA TUA PUBLISHABLE KEY COMPLETA DALLO SCREENSHOT (clicca l'icona copia su Supabase):
+SUPABASE_KEY = "sb_publishable_O5R8uTM_osmovbo_7cjjGg_3XwZQ..." 
 
 HEADERS = {
     "apikey": SUPABASE_KEY,
